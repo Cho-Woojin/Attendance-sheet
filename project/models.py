@@ -11,13 +11,25 @@ WORK_HOURS = (8, 22)
 
 from datetime import datetime
 
+
 def format_date_and_time():
-    days_in_korean = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"]
+    days_in_korean = [
+        "일요일",
+        "월요일",
+        "화요일",
+        "수요일",
+        "목요일",
+        "금요일",
+        "토요일",
+    ]
     now = datetime.now()
     korean_day = days_in_korean[now.weekday()]
     formatted_date = now.strftime(f"%Y년 %m월 %d일 {korean_day}")
-    formatted_time = now.strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
+    formatted_time = (
+        now.strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
+    )
     return formatted_date, formatted_time
+
 
 def reset_logs_with_timestamp():
     """
@@ -39,6 +51,7 @@ def reset_logs_with_timestamp():
     with open(LAST_RESET_FILE, "w") as file:
         file.write(today_date)
 
+
 def load_holidays():
     """
     공휴일 데이터를 JSON 파일에서 로드.
@@ -48,6 +61,7 @@ def load_holidays():
             json.dump([], file)
     with open(HOLIDAYS_FILE, "r") as file:
         return json.load(file)
+
 
 def save_holidays(holidays):
     """
@@ -66,7 +80,11 @@ def is_valid_day_and_time():
     hour = now.hour
     today_date = now.strftime("%Y-%m-%d")
     holidays = load_holidays()
-    return (0 <= weekday < 5) and (today_date not in holidays) and (WORK_HOURS[0] <= hour < WORK_HOURS[1])
+    return (
+        (0 <= weekday < 5)
+        and (today_date not in holidays)
+        and (WORK_HOURS[0] <= hour < WORK_HOURS[1])
+    )
 
 
 def has_record(student_id, record_type):
@@ -79,11 +97,15 @@ def has_record(student_id, record_type):
             next(reader)  # 헤더 건너뜀
             today_date = datetime.now().strftime("%Y-%m-%d")
             for row in reader:
-                if row[0] == student_id and row[1] == today_date and row[3] == record_type:
-                    return datetime.strptime(row[2], "%H:%M:%S").strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
+                return (
+                    row[0] == student_id
+                    and row[1] == today_date
+                    and row[3] == record_type
+                )
     except FileNotFoundError:
         pass
     return None  # 기록 없음
+
 
 def write_to_csv(student_id, action_type):
     """
@@ -91,7 +113,15 @@ def write_to_csv(student_id, action_type):
     """
     with open(LOG_FILE, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-        writer.writerow([student_id, datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%H:%M:%S"), action_type])
+        writer.writerow(
+            [
+                student_id,
+                datetime.now().strftime("%Y-%m-%d"),
+                datetime.now().strftime("%H:%M:%S"),
+                action_type,
+            ]
+        )
+
 
 def calculate_weekly_data(week_start, week_end):
     """
@@ -110,7 +140,10 @@ def calculate_weekly_data(week_start, week_end):
 
             if week_start <= record_date <= week_end:
                 if student_id not in week_data:
-                    week_data[student_id] = {day: {"출근": None, "퇴근": None, "근무시간": "0시간"} for day in range(5)}
+                    week_data[student_id] = {
+                        day: {"출근": None, "퇴근": None, "근무시간": 0.0}
+                        for day in range(5)
+                    }
                 day_of_week = record_date.weekday()
                 if day_of_week < 5:  # 월~금만 기록
                     if record_type == "출근":
@@ -131,6 +164,8 @@ def calculate_weekly_data(week_start, week_end):
                     minutes = 30 if minutes < 45 else 0
                     if minutes == 0:
                         hours += 1
-                records["근무시간"] = f"{hours + (minutes / 60):.1f}".rstrip('0').rstrip('.')
+                records["근무시간"] = f"{hours + (minutes / 60):.1f}".rstrip(
+                    "0"
+                ).rstrip(".")
 
     return week_data
