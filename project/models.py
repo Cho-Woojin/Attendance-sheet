@@ -170,13 +170,3 @@ def calculate_weekly_data(week_start, week_end):
 
     return week_data
 
-
-def testfunctions():
-    print(format_date_and_time())
-    reset_logs_with_timestamp()
-    print(load_holidays())
-    save_holidays(["2021-01-01"])
-    print(is_valid_day_and_time())
-    print(has_record("20210000", "출근"))
-    write_to_csv("20210000", "출근")
-    print(calculate_weekly_data(datetime(2021, 1, 1), datetime(2021, 1, 8)))
