@@ -75,59 +75,41 @@ def init_routes(app):
     # 출근/퇴근 기록
     @app.route("/record", methods=["POST"])
     def record():
-        student_data = load_student_data()  # 학생 정보 로드
-        student_id = request.form.get(
-            "student_id", ""
-        ).strip()  # 학번 입력, 누락 시 기본값 ""
-        action = request.form.get(
-            "action", ""
-        ).strip()  # 출근 또는 퇴근 액션 값, 누락 시 기본값 ""
+        student_id = request.form.get("student_id", "").strip()
+        action = request.form.get("action", "").strip()
 
-        # 학번 또는 액션 값 누락 시
+        # 학번 및 액션 누락 확인
         if not student_id or not action:
-            return render_home(
-                "학번과 액션 값이 필요합니다. 입력 후 다시 시도해주세요."
-            )
-
-        current_time = (
-            datetime.now()
-            .strftime("%p %I:%M")
-            .replace("AM", "오전")
-            .replace("PM", "오후")
-        )
-
-        # 학생 이름 매핑
-        student_name = student_data.get(student_id, None)
-        if not student_name:
-            return render_home("학번이 등록되지 않았습니다. 다시 확인해주세요.")
-
-        # 출퇴근 가능 시간 확인
+            print("Student ID or action missing.")  # 디버깅 출력
+            return render_home("학번과 액션 값을 입력하세요.")
+        
+         # 출근/퇴근 시간 확인
         if not is_valid_day_and_time():
-            return render_home(
-                f"{student_name}님, 출퇴근 가능 시간이 아닙니다. (평일 08:00 ~ 22:00)"
-            )
+            return render_home("출퇴근 가능 시간이 아닙니다. 평일 09:00 ~ 22:00")
+
+
+        # 학생 이름 확인
+        student_name = load_student_data().get(student_id)
+        if not student_name:
+            print(f"Student ID {student_id} not found in student data.")  # 디버깅 출력
+            return render_home("학번이 등록되지 않았습니다.")
+        
 
         # 출근 처리
         if action == "check_in":
             if has_record(student_id, "출근"):
                 return render_home(f"{student_name}님, 이미 출근 기록이 존재합니다.")
             write_to_csv(student_id, "출근")
-            return render_home(
-                f"{student_name}님, {current_time} 출근 기록이 추가되었습니다."
-            )
+            return render_home(f"{student_name}님, 출근 기록이 추가되었습니다.")
 
         # 퇴근 처리
-        elif action == "check_out":
+        if action == "check_out":
             if not has_record(student_id, "출근"):
-                return render_home(
-                    f"{student_name}님, 출근 기록이 없습니다. 먼저 출근을 기록해주세요."
-                )
+                return render_home(f"{student_name}님, 출근 기록이 없습니다. 먼저 출근하세요.")
             if has_record(student_id, "퇴근"):
                 return render_home(f"{student_name}님, 이미 퇴근 기록이 존재합니다.")
             write_to_csv(student_id, "퇴근")
-            return render_home(
-                f"{student_name}님, {current_time} 퇴근 기록이 추가되었습니다."
-            )
+            return render_home(f"{student_name}님, 퇴근 기록이 추가되었습니다.")
 
     # 주간 출석부
     @app.route("/weekly", methods=["GET", "POST"])
@@ -164,22 +146,7 @@ def init_routes(app):
             ranked_hours = []
         else:
             # 주간 데이터 계산
-            week_data = calculate_weekly_data(week_start, week_end)
-
-            # 학생 목록을 기준으로 주차 데이터 구성
-            complete_week_data = {}
-            for student_id, student_name in student_data.items():
-                student_days = week_data.get(
-                    student_id,
-                    {
-                        day: {"출근": None, "퇴근": None, "근무시간": "0.0"}
-                        for day in ["월요일", "화요일", "수요일", "목요일", "금요일"]
-                    },
-                )
-                complete_week_data[student_name] = student_days
-
-            # 정렬된 데이터
-            week_data = dict(sorted(complete_week_data.items()))
+            week_data = calculate_weekly_data(week_start, week_end, student_data)
 
             # 근무 시간 계산 및 정렬
             total_hours = []
