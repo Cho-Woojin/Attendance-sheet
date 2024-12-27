@@ -194,11 +194,12 @@ button {
 
 .date-input {
     padding: 10px;
-    font-size: 16px;
+    font-size: 14px;
     border-radius: 5px;
     border: 1px solid #1F4EF5;
-    width: 60%;
+    width: 80%;
     max-width: 300px;
+    
 }
 
 

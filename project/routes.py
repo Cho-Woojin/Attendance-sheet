@@ -77,6 +77,7 @@ def init_routes(app):
     def record():
         student_id = request.form.get("student_id", "").strip()
         action = request.form.get("action", "").strip()
+        current_time = datetime.now().strftime('%H시 %M분')
 
         # 학번 및 액션 누락 확인
         if not student_id or not action:
@@ -92,7 +93,7 @@ def init_routes(app):
         student_name = load_student_data().get(student_id)
         if not student_name:
             print(f"Student ID {student_id} not found in student data.")  # 디버깅 출력
-            return render_home("학번이 등록되지 않았습니다.")
+            return render_home("등록되지 않은 학생입니다.")
         
 
         # 출근 처리
@@ -100,7 +101,7 @@ def init_routes(app):
             if has_record(student_id, "출근"):
                 return render_home(f"{student_name}님, 이미 출근 기록이 존재합니다.")
             write_to_csv(student_id, "출근")
-            return render_home(f"{student_name}님, 출근 기록이 추가되었습니다.")
+            return render_home(f"{student_name}님, {current_time}에 출근 기록이 추가되었습니다.")
 
         # 퇴근 처리
         if action == "check_out":
@@ -109,7 +110,7 @@ def init_routes(app):
             if has_record(student_id, "퇴근"):
                 return render_home(f"{student_name}님, 이미 퇴근 기록이 존재합니다.")
             write_to_csv(student_id, "퇴근")
-            return render_home(f"{student_name}님, 퇴근 기록이 추가되었습니다.")
+            return render_home(f"{student_name}님, {current_time}에 퇴근 기록이 추가되었습니다.")
 
     # 주간 출석부
     @app.route("/weekly", methods=["GET", "POST"])
@@ -175,18 +176,24 @@ def init_routes(app):
     # 공휴일 관리
     @app.route("/manage_holidays", methods=["GET", "POST"])
     def manage_holidays():
+        print("메니지 홀리데이 호출")
+
         holidays = load_holidays()
         if request.method == "POST":
             action = request.form["action"]
             if action == "add":
+                
                 new_date = request.form["date"]
                 if new_date not in holidays:
                     holidays.append(new_date)
             elif action == "delete_selected":
+                print("호출되었음음")
                 selected_dates = request.form.getlist(
                     "selected_dates"
                 )  # 다중 선택된 날짜
+                print("selected_dates", selected_dates)
                 holidays = [h for h in holidays if h not in selected_dates]
+                print("holidays", holidays)
             save_holidays(holidays)
         return render_template("manage_holidays.html", holidays=holidays)
 
