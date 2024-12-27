@@ -12,7 +12,7 @@ from models import (
     has_record,
     calculate_weekly_data,
 )
-
+import pytz
 
 # CSV 파일 경로
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -20,6 +20,7 @@ LOG_FILE = "attendance.csv"
 BACKUP_DIR = "backups"
 STUDENT_FILE = "students.json"
 
+KST = pytz.timezone('Asia/Seoul')
 
 # 백업 생성 함수
 def backup_csv():
@@ -77,7 +78,7 @@ def init_routes(app):
     def record():
         student_id = request.form.get("student_id", "").strip()
         action = request.form.get("action", "").strip()
-        current_time = datetime.now().strftime('%H시 %M분')
+        current_time = datetime.now(KST).strftime('%H시 %M분')
 
         # 학번 및 액션 누락 확인
         if not student_id or not action:
@@ -116,8 +117,8 @@ def init_routes(app):
     @app.route("/weekly", methods=["GET", "POST"])
     def weekly():
         student_data = load_student_data()  # 학생 정보 로드
-        current_year = datetime.now().year
-        today = datetime.now().date()
+        current_year = datetime.now(KST).year
+        today = datetime.now(KST).date()
 
         # 주차와 월 선택
         if request.method == "POST":
@@ -125,14 +126,14 @@ def init_routes(app):
             selected_week = int(request.form.get("week"))
 
             # 선택한 월과 주차의 첫 번째 날 계산
-            month_start = datetime(current_year, selected_month, 1)
+            month_start = datetime(current_year, selected_month, 1, tzinfo=KST)
             week_start = month_start + timedelta(weeks=selected_week - 1)
             week_start = week_start - timedelta(
                 days=week_start.weekday()
             )  # 해당 주의 월요일로 설정
         else:
             # 기본적으로 현재 주차로 설정
-            week_start = datetime.now() - timedelta(days=datetime.now().weekday())
+            week_start = datetime.now(KST) - timedelta(days=datetime.now(KST).weekday())
             selected_month = week_start.month
             selected_week = (week_start.day - 1) // 7 + 1
 
@@ -223,13 +224,13 @@ def init_routes(app):
             "토요일",
             "일요일",
         ]
-        now = datetime.now()
+        now = datetime.now(KST)
         korean_day = days_in_korean[now.weekday()]
         return now.strftime(f"%Y년 %m월 %d일 {korean_day}")
 
     def get_current_time():
         return (
-            datetime.now()
+            datetime.now(KST)
             .strftime("%p %I:%M")
             .replace("AM", "오전")
             .replace("PM", "오후")

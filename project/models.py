@@ -3,6 +3,7 @@ import csv
 import os
 import json
 from datetime import datetime, timedelta
+import pytz
 
 # 파일 경로와 작업 시간 정의
 LOG_FILE = "attendance.csv"
@@ -10,10 +11,12 @@ LAST_RESET_FILE = "last_reset.txt"
 HOLIDAYS_FILE = "holidays.json"
 WORK_HOURS = (8, 22)
 
+KST = pytz.timezone('Asia/Seoul')
+
 # 날짜와 시간 포맷팅
 def format_date_and_time():
     days_in_korean = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"]
-    now = datetime.now()
+    now = datetime.now(KST)
     korean_day = days_in_korean[now.weekday()]
     formatted_date = now.strftime(f"%Y년 %m월 %d일 {korean_day}")
     formatted_time = now.strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
@@ -21,7 +24,7 @@ def format_date_and_time():
 
 # 로그 초기화
 def reset_logs_with_timestamp():
-    today_date = datetime.now().strftime("%Y-%m-%d")
+    today_date = datetime.now(KST).strftime("%Y-%m-%d")
     if os.path.exists(LAST_RESET_FILE):
         with open(LAST_RESET_FILE, "r") as file:
             last_reset_date = file.read().strip()
@@ -53,7 +56,7 @@ def save_holidays(holidays):
 
 # 유효한 시간 및 날짜인지 확인
 def is_valid_day_and_time():
-    now = datetime.now()
+    now = datetime.now(KST)
     weekday = now.weekday()
     hour = now.hour
     today_date = now.strftime("%Y-%m-%d")
@@ -66,7 +69,7 @@ def has_record(student_id, record_type):
         with open(LOG_FILE, mode="r", encoding="utf-8") as file:
             reader = csv.reader(file)
             next(reader)  # 헤더 건너뜀
-            today_date = datetime.now().strftime("%Y-%m-%d")
+            today_date = datetime.now(KST).strftime("%Y-%m-%d")
             for row in reader:
                 if len(row) >= 4 and row[0] == student_id and row[1] == today_date and row[3] == record_type:
                     return True
@@ -99,7 +102,7 @@ def round_time_to_half_hour(start_time=None, end_time=None):
 
 # CSV 기록
 def write_to_csv(student_id, action_type):
-    now = datetime.now()
+    now = datetime.now(KST)
     with open(LOG_FILE, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow([student_id, now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"), action_type])
@@ -124,6 +127,9 @@ def calculate_weekly_data(week_start, week_end, student_data):
     """
     주간 데이터를 계산하여 각 학생의 근무 시간과 출퇴근 기록 반환.
     """
+    week_start = week_start.astimezone(KST)
+    week_end = week_end.astimezone(KST)
+
     if not os.path.exists(LOG_FILE):
         return {}
 
@@ -135,7 +141,7 @@ def calculate_weekly_data(week_start, week_end, student_data):
             if len(row) < 4:
                 continue
             student_id, date, time, record_type = row
-            record_date = datetime.strptime(date, "%Y-%m-%d")
+            record_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=KST)
 
             if week_start <= record_date <= week_end:
                 if student_id not in week_data:
