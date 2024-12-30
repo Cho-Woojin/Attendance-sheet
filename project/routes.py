@@ -20,7 +20,8 @@ LOG_FILE = "attendance.csv"
 BACKUP_DIR = "backups"
 STUDENT_FILE = os.path.join(BASE_DIR, "students.json")
 
-KST = pytz.timezone('Asia/Seoul')
+KST = pytz.timezone("Asia/Seoul")
+
 
 # 백업 생성 함수
 def backup_csv():
@@ -78,40 +79,44 @@ def init_routes(app):
     def record():
         student_id = request.form.get("student_id", "").strip()
         action = request.form.get("action", "").strip()
-        current_time = datetime.now(KST).strftime('%H시 %M분')
+        current_time = datetime.now(KST).strftime("%H시 %M분")
 
         # 학번 및 액션 누락 확인
         if not student_id or not action:
             print("Student ID or action missing.")  # 디버깅 출력
             return render_home("학번과 액션 값을 입력하세요.")
-        
-         # 출근/퇴근 시간 확인
+
+        # 출근/퇴근 시간 확인
         if not is_valid_day_and_time():
             return render_home("출퇴근 가능 시간이 아닙니다. 평일 09:00 ~ 22:00")
-
 
         # 학생 이름 확인
         student_name = load_student_data().get(student_id)
         if not student_name:
             print(f"Student ID {student_id} not found in student data.")  # 디버깅 출력
             return render_home("등록되지 않은 학생입니다.")
-        
 
         # 출근 처리
         if action == "check_in":
             if has_record(student_id, "출근"):
                 return render_home(f"{student_name}님, 이미 출근 기록이 존재합니다.")
             write_to_csv(student_id, "출근")
-            return render_home(f"{student_name}님, {current_time}에 출근 기록이 추가되었습니다.")
+            return render_home(
+                f"{student_name}님, {current_time}에 출근 기록이 추가되었습니다."
+            )
 
         # 퇴근 처리
         if action == "check_out":
             if not has_record(student_id, "출근"):
-                return render_home(f"{student_name}님, 출근 기록이 없습니다. 먼저 출근하세요.")
+                return render_home(
+                    f"{student_name}님, 출근 기록이 없습니다. 먼저 출근하세요."
+                )
             if has_record(student_id, "퇴근"):
                 return render_home(f"{student_name}님, 이미 퇴근 기록이 존재합니다.")
             write_to_csv(student_id, "퇴근")
-            return render_home(f"{student_name}님, {current_time}에 퇴근 기록이 추가되었습니다.")
+            return render_home(
+                f"{student_name}님, {current_time}에 퇴근 기록이 추가되었습니다."
+            )
 
     # 주간 출석부
     @app.route("/weekly", methods=["GET", "POST"])
@@ -127,10 +132,11 @@ def init_routes(app):
 
             # 선택한 월과 주차의 첫 번째 날 계산
             month_start = datetime(current_year, selected_month, 1, tzinfo=KST)
-            week_start = month_start + timedelta(weeks=selected_week - 1)
+            week_start = month_start + timedelta(weeks=selected_week)
             week_start = week_start - timedelta(
                 days=week_start.weekday()
             )  # 해당 주의 월요일로 설정
+
         else:
             # 기본적으로 현재 주차로 설정
             week_start = datetime.now(KST) - timedelta(days=datetime.now(KST).weekday())
@@ -146,22 +152,31 @@ def init_routes(app):
             }
             title = f"{selected_month}월({selected_week}주차): 미래 주차"
             ranked_hours = []
-        else:
-            # 주간 데이터 계산
-            week_data = calculate_weekly_data(week_start, week_end, student_data)
+            return render_template(
+                "weekly.html",
+                title=title,
+                week_data=week_data,
+                ranked_hours=ranked_hours,
+                selected_month=selected_month,
+                selected_week=selected_week,
+                enumerate=enumerate,
+            )
 
-            # 근무 시간 계산 및 정렬
-            total_hours = []
-            for student_name, days in week_data.items():
-                total_time = sum(
-                    float(day["근무시간"])
-                    for day in days.values()
-                    if day["근무시간"] != "0.0"
-                )
-                total_hours.append((student_name, total_time))
-            ranked_hours = sorted(total_hours, key=lambda x: (-x[1], x[0]))
+        # 주간 데이터 계산
+        week_data = calculate_weekly_data(week_start, week_end, student_data)
 
-            title = f"{selected_month}월({selected_week}주차, {week_start.strftime('%m/%d')}~{week_end.strftime('%m/%d')}) 출석부"
+        # 근무 시간 계산 및 정렬
+        total_hours = []
+        for student_name, days in week_data.items():
+            total_time = sum(
+                float(day["근무시간"])
+                for day in days.values()
+                if day["근무시간"] != "0.0"
+            )
+            total_hours.append((student_name, total_time))
+        ranked_hours = sorted(total_hours, key=lambda x: (-x[1], x[0]))
+
+        title = f"{selected_month}월({selected_week}주차, {week_start.strftime('%m/%d')}~{week_end.strftime('%m/%d')}) 출석부"
 
         # 템플릿으로 데이터 전달
         return render_template(
@@ -183,7 +198,7 @@ def init_routes(app):
         if request.method == "POST":
             action = request.form["action"]
             if action == "add":
-                
+
                 new_date = request.form["date"]
                 if new_date not in holidays:
                     holidays.append(new_date)
