@@ -20,7 +20,8 @@ LOG_FILE = "attendance.csv"
 BACKUP_DIR = "backups"
 STUDENT_FILE = os.path.join(BASE_DIR, "students.json")
 
-KST = pytz.timezone('Asia/Seoul')
+KST = pytz.timezone("Asia/Seoul")
+
 
 # 백업 생성 함수
 def backup_csv():
@@ -78,40 +79,44 @@ def init_routes(app):
     def record():
         student_id = request.form.get("student_id", "").strip()
         action = request.form.get("action", "").strip()
-        current_time = datetime.now(KST).strftime('%H시 %M분')
+        current_time = datetime.now(KST).strftime("%H시 %M분")
 
         # 학번 및 액션 누락 확인
         if not student_id or not action:
             print("Student ID or action missing.")  # 디버깅 출력
             return render_home("학번과 액션 값을 입력하세요.")
-        
-         # 출근/퇴근 시간 확인
+
+        # 출근/퇴근 시간 확인
         if not is_valid_day_and_time():
             return render_home("출퇴근 가능 시간이 아닙니다. 평일 09:00 ~ 22:00")
-
 
         # 학생 이름 확인
         student_name = load_student_data().get(student_id)
         if not student_name:
             print(f"Student ID {student_id} not found in student data.")  # 디버깅 출력
             return render_home("등록되지 않은 학생입니다.")
-        
 
         # 출근 처리
         if action == "check_in":
             if has_record(student_id, "출근"):
                 return render_home(f"{student_name}님, 이미 출근 기록이 존재합니다.")
             write_to_csv(student_id, "출근")
-            return render_home(f"{student_name}님, {current_time}에 출근 기록이 추가되었습니다.")
+            return render_home(
+                f"{student_name}님, {current_time}에 출근 기록이 추가되었습니다."
+            )
 
         # 퇴근 처리
         if action == "check_out":
             if not has_record(student_id, "출근"):
-                return render_home(f"{student_name}님, 출근 기록이 없습니다. 먼저 출근하세요.")
+                return render_home(
+                    f"{student_name}님, 출근 기록이 없습니다. 먼저 출근하세요."
+                )
             if has_record(student_id, "퇴근"):
                 return render_home(f"{student_name}님, 이미 퇴근 기록이 존재합니다.")
             write_to_csv(student_id, "퇴근")
-            return render_home(f"{student_name}님, {current_time}에 퇴근 기록이 추가되었습니다.")
+            return render_home(
+                f"{student_name}님, {current_time}에 퇴근 기록이 추가되었습니다."
+            )
 
     # 주간 출석부
     @app.route("/weekly", methods=["GET", "POST"])
@@ -133,7 +138,9 @@ def init_routes(app):
             )  # 해당 주의 월요일로 설정
         else:
             # 기본적으로 현재 주차로 설정
-            week_start = datetime.now(KST) - timedelta(days=datetime.now(KST).weekday())
+            week_start = datetime.now(KST).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ) - timedelta(days=datetime.now(KST).weekday())
             selected_month = week_start.month
             selected_week = (week_start.day - 1) // 7 + 1
 
@@ -183,7 +190,7 @@ def init_routes(app):
         if request.method == "POST":
             action = request.form["action"]
             if action == "add":
-                
+
                 new_date = request.form["date"]
                 if new_date not in holidays:
                     holidays.append(new_date)
