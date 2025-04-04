@@ -6,9 +6,10 @@ from datetime import datetime, timedelta
 import pytz
 
 # 파일 경로와 작업 시간 정의
-LOG_FILE = "attendance.csv"
-LAST_RESET_FILE = "last_reset.txt"
-HOLIDAYS_FILE = "holidays.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # 현재 파일의 디렉토리
+LOG_FILE = os.path.join(BASE_DIR, "attendance.csv")
+LAST_RESET_FILE = os.path.join(BASE_DIR, "last_reset.txt")
+HOLIDAYS_FILE = os.path.join(BASE_DIR, "holidays.json")
 WORK_HOURS = (8, 22)
 
 KST = pytz.timezone('Asia/Seoul')
@@ -54,14 +55,29 @@ def save_holidays(holidays):
     with open(HOLIDAYS_FILE, "w") as file:
         json.dump(holidays, file, indent=4)
 
-# 유효한 시간 및 날짜인지 확인
-def is_valid_day_and_time():
+
+def is_valid_day_and_time(action=None):
     now = datetime.now(KST)
     weekday = now.weekday()
     hour = now.hour
     today_date = now.strftime("%Y-%m-%d")
     holidays = load_holidays()
-    return (0 <= weekday < 5) and (today_date not in holidays) and (WORK_HOURS[0] <= hour < WORK_HOURS[1])
+
+    # 평일이고 공휴일이 아니어야 함
+    if not (0 <= weekday < 5) or today_date in holidays:
+        return False
+
+    # 출근은 8시~22시까지
+    if action == "check_in":
+        return 8 <= hour < 22
+
+    # 퇴근은 8시~24시까지
+    if action == "check_out":
+        return 8 <= hour < 24
+
+    # 기본은 출근 기준
+    return 8 <= hour < 22
+
 
 # 기록 여부 확인
 def has_record(student_id, record_type):
@@ -77,11 +93,8 @@ def has_record(student_id, record_type):
         pass
     return False
 
-# 시간 반올림 함수 (단일 시간 or 시간 차이 모두 처리 가능)
+# 시간 반올림 함수 (0.0, 0.5 단위로만 반올림)
 def round_time_to_half_hour(start_time=None, end_time=None):
-    """
-    두 시간의 차이를 계산하거나 단일 시간의 반올림을 수행.
-    """
     if start_time and end_time:
         total_minutes = (end_time - start_time).seconds // 60
     elif start_time:
@@ -92,10 +105,14 @@ def round_time_to_half_hour(start_time=None, end_time=None):
     hours = total_minutes // 60
     minutes = total_minutes % 60
 
-    if minutes >= 15:
-        minutes = 30 if minutes < 45 else 0
-        if minutes == 0:
-            hours += 1
+    # 0~15분은 0으로, 15~45분은 30으로, 45~59분은 다음 시의 0으로 반올림
+    if minutes < 15:
+        minutes = 0
+    elif minutes < 45:
+        minutes = 30
+    else:
+        minutes = 0
+        hours += 1
 
     return f"{hours + (minutes / 60):.1f}".rstrip('0').rstrip('.')
 
@@ -148,16 +165,28 @@ def calculate_weekly_data(week_start, week_end, student_data):
                     week_data[student_id] = {day: {"출근": None, "퇴근": None, "근무시간": "0.0"} for day in range(5)}
                 day_of_week = record_date.weekday()
                 if 0 <= day_of_week < 5:
-                    rounded_time = round_time_to_half_hour(datetime.strptime(time, "%H:%M:%S"))
+                    time_obj = datetime.strptime(time, "%H:%M:%S").time()
+
+                    if record_type == "퇴근" and time_obj.hour >= 22:
+                        rounded_time = "22"
+                    else:
+                        adjusted_time = datetime.combine(datetime.today(), time_obj)
+                        rounded_time = round_time_to_half_hour(adjusted_time)
+
                     week_data[student_id][day_of_week][record_type] = rounded_time
+
 
     # 근무 시간 계산
     for student_id, days in week_data.items():
         for day, records in days.items():
             if records["출근"] and records["퇴근"]:
-                start_time = float(records["출근"])
-                end_time = float(records["퇴근"])
-                records["근무시간"] = f"{end_time - start_time:.1f}"
+                try:
+                    start_time = max(8.0, float(records["출근"]))
+                    end_time = min(22.0, float(records["퇴근"]))
+                    work_time = max(0.0, end_time - start_time)
+                    records["근무시간"] = f"{work_time:.1f}"
+                except ValueError:
+                    records["근무시간"] = "0.0"
 
     # 학생 이름 기준으로 정렬
     sorted_week_data = {}

@@ -18,7 +18,7 @@ import pytz
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE = "attendance.csv"
 BACKUP_DIR = "backups"
-STUDENT_FILE = "students.json"
+STUDENT_FILE = os.path.join(BASE_DIR, "students.json")
 
 KST = pytz.timezone('Asia/Seoul')
 
@@ -58,9 +58,11 @@ def load_student_data():
     """
     학생 정보(학번-이름)를 JSON 파일에서 불러옴.
     """
-    with open("students.json", "r", encoding="utf-8") as file:
-        return json.load(file)
-
+    try:
+        with open(STUDENT_FILE, "r", encoding="utf-8") as file:
+                return json.load(file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"students.json 파일을 찾을 수 없습니다. 경로를 확인하세요: {STUDENT_FILE}")
 
 def init_routes(app):
     # 홈페이지
@@ -84,10 +86,13 @@ def init_routes(app):
         if not student_id or not action:
             print("Student ID or action missing.")  # 디버깅 출력
             return render_home("학번과 액션 값을 입력하세요.")
-        
+
          # 출근/퇴근 시간 확인
-        if not is_valid_day_and_time():
-            return render_home("출퇴근 가능 시간이 아닙니다. 평일 09:00 ~ 22:00")
+        if action == "check_in" and not is_valid_day_and_time("check_in"):
+            return render_home("출근 가능 시간이 아닙니다. 평일 08:00 ~ 22:00")
+        elif action == "check_out" and not is_valid_day_and_time("check_out"):
+            return render_home("퇴근 가능 시간이 아닙니다. 평일 08:00 ~ 24:00")
+
 
 
         # 학생 이름 확인
@@ -95,7 +100,7 @@ def init_routes(app):
         if not student_name:
             print(f"Student ID {student_id} not found in student data.")  # 디버깅 출력
             return render_home("등록되지 않은 학생입니다.")
-        
+
 
         # 출근 처리
         if action == "check_in":
@@ -183,7 +188,7 @@ def init_routes(app):
         if request.method == "POST":
             action = request.form["action"]
             if action == "add":
-                
+
                 new_date = request.form["date"]
                 if new_date not in holidays:
                     holidays.append(new_date)
