@@ -11,6 +11,7 @@ from models import (
     is_valid_day_and_time,
     has_record,
     calculate_weekly_data,
+    calculate_total_hours,
 )
 import pytz
 
@@ -88,11 +89,8 @@ def init_routes(app):
             return render_home("학번과 액션 값을 입력하세요.")
 
          # 출근/퇴근 시간 확인
-        if action == "check_in" and not is_valid_day_and_time("check_in"):
-            return render_home("출근 가능 시간이 아닙니다. 평일 08:00 ~ 22:00")
-        elif action == "check_out" and not is_valid_day_and_time("check_out"):
-            return render_home("퇴근 가능 시간이 아닙니다. 평일 08:00 ~ 24:00")
-
+        if not is_valid_day_and_time():
+            return render_home("출퇴근 가능 시간이 아닙니다. 평일 08:00 ~ 22:00")
 
 
         # 학생 이름 확인
@@ -121,54 +119,76 @@ def init_routes(app):
     # 주간 출석부
     @app.route("/weekly", methods=["GET", "POST"])
     def weekly():
-        student_data = load_student_data()  # 학생 정보 로드
+        student_data = load_student_data()
         current_year = datetime.now(KST).year
-        today = datetime.now(KST).date()
+        today = datetime.now(KST)
+        today_date = today.date()
 
-        # 주차와 월 선택
+        # 기본값
+        selected_month = today.month
+        selected_week = None
+
         if request.method == "POST":
             selected_month = int(request.form.get("month"))
             selected_week = int(request.form.get("week"))
 
-            # 선택한 월과 주차의 첫 번째 날 계산
-            month_start = datetime(current_year, selected_month, 1, tzinfo=KST)
-            week_start = month_start + timedelta(weeks=selected_week - 1)
-            week_start = week_start - timedelta(
-                days=week_start.weekday()
-            )  # 해당 주의 월요일로 설정
+        # 주차 리스트 생성
+        month_start = datetime(current_year, selected_month, 1, tzinfo=KST)
+        month_end = (
+            datetime(current_year, selected_month + 1, 1, tzinfo=KST) - timedelta(days=1)
+            if selected_month < 12
+            else datetime(current_year + 1, 1, 1, tzinfo=KST) - timedelta(days=1)
+        )
+
+        weeks = []
+        current = month_start - timedelta(days=month_start.weekday())  # 월요일 기준
+
+        while current <= month_end:
+            week_end = current + timedelta(days=4)
+
+            # 오늘 이후의 시작 주는 제외
+            if current.date() > today_date:
+                break
+
+            if (month_start <= current <= month_end) or (month_start <= week_end <= month_end):
+                weeks.append((current, week_end))
+
+            current += timedelta(weeks=1)
+
+        # 주차 자동 선택 (오늘 포함된 주차)
+        if selected_week is None:
+            for idx, (start, end) in enumerate(weeks):
+                if start.date() <= today_date <= end.date():
+                    selected_week = idx + 1
+                    break
+            else:
+                selected_week = len(weeks)
+
+        # 선택한 주차 인덱스로 start/end 가져오기
+        if 1 <= selected_week <= len(weeks):
+            week_start, week_end = weeks[selected_week - 1]
         else:
-            # 기본적으로 현재 주차로 설정
-            week_start = datetime.now(KST) - timedelta(days=datetime.now(KST).weekday())
-            selected_month = week_start.month
-            selected_week = (week_start.day - 1) // 7 + 1
+            # 주차 계산: 월요일 기준으로 선택 주차 직접 계산
+            week_start = month_start - timedelta(days=month_start.weekday()) + timedelta(weeks=selected_week - 1)
+            week_end = week_start + timedelta(days=4)
 
-        week_end = week_start + timedelta(days=4)  # 해당 주의 금요일
+        # 출석 데이터 계산
+        week_data = calculate_weekly_data(week_start, week_end, student_data)
 
-        # 미래 주차 조회 시 빈 데이터 반환
-        if week_start.date() > today:
-            week_data = {
-                student_data[student_id]: {} for student_id in student_data.keys()
-            }
-            title = f"{selected_month}월({selected_week}주차): 미래 주차"
-            ranked_hours = []
-        else:
-            # 주간 데이터 계산
-            week_data = calculate_weekly_data(week_start, week_end, student_data)
+        # 근무 시간 계산
+        total_hours = []
+        for student_name, days in week_data.items():
+            total_time = sum(
+                float(day["근무시간"])
+                for day in days.values()
+                if day["근무시간"] != "0.0"
+            )
+            total_hours.append((student_name, total_time))
 
-            # 근무 시간 계산 및 정렬
-            total_hours = []
-            for student_name, days in week_data.items():
-                total_time = sum(
-                    float(day["근무시간"])
-                    for day in days.values()
-                    if day["근무시간"] != "0.0"
-                )
-                total_hours.append((student_name, total_time))
-            ranked_hours = sorted(total_hours, key=lambda x: (-x[1], x[0]))
+        ranked_hours = sorted(total_hours, key=lambda x: (-x[1], x[0]))
 
-            title = f"{selected_month}월({selected_week}주차, {week_start.strftime('%m/%d')}~{week_end.strftime('%m/%d')}) 출석부"
+        title = f"{selected_month}월 {selected_week}주차 ({week_start.strftime('%m/%d')}~{week_end.strftime('%m/%d')}) 출석부"
 
-        # 템플릿으로 데이터 전달
         return render_template(
             "weekly.html",
             title=title,
@@ -176,8 +196,32 @@ def init_routes(app):
             ranked_hours=ranked_hours,
             selected_month=selected_month,
             selected_week=selected_week,
+            weeks=weeks,
             enumerate=enumerate,
         )
+
+    # 전체 근무시간 랭킹
+    @app.route("/total")
+    def total():
+        student_data = load_student_data()
+        today = datetime.now(KST)
+        semester_start = datetime(today.year, 3, 1, tzinfo=KST)
+
+        # 누적 근무시간 계산
+        total_hours = calculate_total_hours(semester_start, today, student_data)
+        # 누적 근무시간 순위 정렬
+        ranked_total_hours = sorted(total_hours, key=lambda x: (-x[1], x[0]))
+
+
+        return render_template(
+            "total.html",
+            title="IPUD 2025-1 출석 랭킹",
+            ranked_total_hours=ranked_total_hours,
+            date=today.strftime("%Y-%m-%d"),
+            enumerate=enumerate
+        )
+
+
 
     # 공휴일 관리
     @app.route("/manage_holidays", methods=["GET", "POST"])

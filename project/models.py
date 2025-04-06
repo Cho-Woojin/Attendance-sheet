@@ -10,9 +10,36 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # 현재 파일의 디렉
 LOG_FILE = os.path.join(BASE_DIR, "attendance.csv")
 LAST_RESET_FILE = os.path.join(BASE_DIR, "last_reset.txt")
 HOLIDAYS_FILE = os.path.join(BASE_DIR, "holidays.json")
+CONFIG_FILE = os.path.join(BASE_DIR, "semester.json")
 WORK_HOURS = (8, 22)
 
 KST = pytz.timezone('Asia/Seoul')
+
+def get_total_period_from_config():
+    """
+    semester.json 파일에서 학기 시작일을 불러와 누적 기간 반환
+    """
+    if not os.path.exists(CONFIG_FILE):
+        raise FileNotFoundError("semester.json 파일이 존재하지 않습니다.")
+
+    with open(CONFIG_FILE, "r", encoding="utf-8") as file:
+        config = json.load(file)
+
+    semester_start_str = config.get("semester_start")
+    if not semester_start_str:
+        raise ValueError("semester.json에 'semester_start' 값이 없습니다.")
+
+    semester_start = datetime.strptime(semester_start_str, "%Y-%m-%d").replace(tzinfo=KST)
+    today = datetime.now(KST)
+    return semester_start, today
+
+
+# 학기 시작일 설정
+def get_total_period():
+    semester_start = datetime(2025, 3, 1, tzinfo=KST)  # <== 여기를 학기 시작일로 설정
+    today = datetime.now(KST)
+    return semester_start, today
+
 
 # 날짜와 시간 포맷팅
 def format_date_and_time():
@@ -196,3 +223,27 @@ def calculate_weekly_data(week_start, week_end, student_data):
         sorted_week_data[name] = week_data.get(student_id, {})
 
     return sorted_week_data
+
+
+def calculate_total_hours(start_date, end_date, student_data):
+    start, end = get_total_period_from_config()
+
+    total_data = {}
+    current = start
+ 
+    while current <= end:
+        week_start = current - timedelta(days=current.weekday())
+        week_end = week_start + timedelta(days=4)
+
+        week_data = calculate_weekly_data(week_start, week_end, student_data)
+
+        for student_name, days in week_data.items():
+            if student_name not in total_data:
+                total_data[student_name] = 0.0
+            for day in days.values():
+                total_data[student_name] += float(day["근무시간"])
+
+        current += timedelta(weeks=1)
+
+    ranked_total = sorted(total_data.items(), key=lambda x: (-x[1], x[0]))
+    return ranked_total

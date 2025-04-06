@@ -319,3 +319,16 @@ button {
         text-align: center; /* 가운데 정렬 */
     }
 
+    tr.gold {
+        background-color: #FFFACD; /* 연한 금색 */
+        font-weight: bold;
+    }
+    tr.silver {
+        background-color: #F0F0F0; /* 연한 은색 */
+        font-weight: bold;
+    }
+    tr.bronze {
+        background-color: #FFE4B5; /* 연한 동색 */
+        font-weight: bold;
+    }
+    
